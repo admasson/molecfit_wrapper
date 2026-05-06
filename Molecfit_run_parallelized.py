@@ -26,6 +26,11 @@ import csv
 import pandas as pd
 import mpmath as mpm
 
+try:
+    from PyAstronomy import pyasl
+except Exception:
+    pyasl = None
+
 
 #string that contains the current date
 #useful to keep an order in the directory sorting
@@ -39,47 +44,74 @@ molecfit_version = "Release v1.5.9"
 # Change following parameters
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #1) <path to generic parameter file(s)>
-path_to_gen_par = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/generic_parfile.par"
+path_to_gen_par = "/home/amasson/data/molecfit_wrapper/Parameter_Files/generic_parfile.par"
 #name of the template parameter file
 name_gen_par = "/"+path_to_gen_par.split("/")[-1]
 
 #2) <path to list of spectra file>
-path_to_list = "/vol/alcina/data1/jdenbrok/molecfit/Automated_Program/summary_xshooter_jan.csv"
+path_to_list = "/home/amasson/data/molecfit_wrapper/Automated_Program/TOI-969b_HARPS_03-03-2024.csv"
 
 #3) <path to where the software tools >
-path_to_molecfit = "/vol/alcina/data1/jdenbrok/molecfit/MFit/bin/"
+path_to_molecfit = "/home/amasson/data/molecfit/bin/"
 
 #4) <path to directory where Program is>
-path_to_program = "/vol/alcina/data1/jdenbrok/molecfit/Automated_Program"
+path_to_program = "/home/amasson/data/molecfit_wrapper/Automated_Program"
 
-path_to_results = "/vol/alcina/data1/jdenbrok/molecfit/Output/output"
+path_to_results = "/home/amasson/data/molecfit_wrapper/Output/output"
 
 #<path to file with inclusion regions>
-path_to_tellurics = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/tellurics_regions.dat"
+path_to_tellurics = "/home/amasson/data/molecfit_wrapper/Parameter_Files/tellurics_regions.dat"
 
 #<path to file with the telluric region selected for plotting>
-path_to_telluric_plotting_reg = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/tellurics_plot_reg.dat"
+path_to_telluric_plotting_reg = "/home/amasson/data/molecfit_wrapper/Parameter_Files/tellurics_plot_reg.dat"
 
 #<path to file with emission lines>
-path_to_ems_lines = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/Emission_Lines.dat"
+path_to_ems_lines = "/home/amasson/data/molecfit_wrapper/Parameter_Files/Emission_Lines.dat"
 
 
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# Optional, only necessary if Palomar or Du Pont
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#<path to the palomar wearther data + first part of filename>
-path_p60 = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/weather_data/p60weather.txt"
-path_p200 = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/weather_data/p200weather.txt"
+# #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# # Optional, only necessary if Palomar or Du Pont
+# #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# #<path to the palomar wearther data + first part of filename>
+# path_p60 = "/home/data/molecfit_wrapper/Parameter_Files/weather_data/p60weather.txt"
+# path_p200 = "/home/data/molecfit_wrapper/Parameter_Files/weather_data/p200weather.txt"
 
-#<path to the DuPont wearther data >
-path_DuPont_weather = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/weather_data/weather_data_all.txt"
-#<path to Master Transmission File>
-path_master_trans = "/vol/alcina/data1/jdenbrok/molecfit/Parameter_Files/Master_Transmission.txt"
+# #<path to the DuPont wearther data >
+# path_DuPont_weather = "/home/data/molecfit_wrapper/Parameter_Files/weather_data/weather_data_all.txt"
+# #<path to Master Transmission File>
+# path_master_trans = "/home/data/molecfit_wrapper/Parameter_Files/Master_Transmission.txt"
+
+# Optional weather files for Palomar/DuPont-specific modes.
+path_p60 = None
+path_p200 = None
+path_DuPont_weather = None
+
+# Quality-check master transmission templates.
+# Set to None to disable global quality check.
+path_master_trans = "/home/data/molecfit_wrapper/Parameter_Files/Master_Transmission.txt"
+
+# Optional per-instrument templates. Use None to skip quality check for that case.
+path_master_trans_by_instrument = {
+    "HARPS": None,
+    "NIRPS": None,
+    "CARMENES_VIS": None,
+    "CARMENES_NIR": None,
+}
+
+# Optional fallback resolving powers when header resolution keywords are absent.
+# Values are typical defaults and can be tuned per dataset.
+default_resolution_by_instrument = {
+    "HARPS": 115000.0,
+    "NIRPS": 80000.0,
+    "CARMENES_VIS": 94600.0,
+    "CARMENES_NIR": 80400.0,
+    "UNKNOWN": 74000.0,
+}
 
 
 #<path to final results>
 #this directory will be created
-path_to_final_results = "/vol/alcina/data1/jdenbrok/molecfit/Final_Results_Molecfit/Final_Results"+date_string
+path_to_final_results = "/home/amasson/data/molecfit_wrapper/Final_Results_Molecfit/Final_Results"+date_string
 
 #path to the LSF fiel aht will be creayed if OWN_LSF True
 path_kernel_file = path_to_program + "/own_input_kernel.dat"
@@ -111,6 +143,47 @@ def replace(file_path, file_path_new,pattern, subst):
     #Move new file
     shutil.move(abs_path, file_path_new)
 
+def _first_header_value(path_to_file, keys, default=None):
+    for key in keys:
+        try:
+            value = get_header_info(path_to_file, key)
+            if value is not None:
+                return float(value)
+        except Exception:
+            pass
+    return default
+
+def _first_header_raw(path_to_file, keys, default=None):
+    for key in keys:
+        try:
+            value = get_header_info(path_to_file, key)
+            if value is not None:
+                return value
+        except Exception:
+            pass
+    return default
+
+def _detect_instrument_family(path_to_file):
+    instr = str(_first_header_raw(path_to_file, ["INSTRUME"], default="")).upper()
+    subsys = str(_first_header_raw(path_to_file, ["SUBSYS"], default="")).upper()
+    if "HARPS" in instr:
+        return "HARPS"
+    if "NIRPS" in instr:
+        return "NIRPS"
+    if "CARMENES" in instr:
+        if "VIS" in subsys:
+            return "CARMENES_VIS"
+        if "NIR" in subsys:
+            return "CARMENES_NIR"
+        return "CARMENES_VIS"
+    return "UNKNOWN"
+
+def _get_master_transmission_path(path_to_file):
+    family = _detect_instrument_family(path_to_file)
+    if family in path_master_trans_by_instrument:
+        return path_master_trans_by_instrument[family]
+    return path_master_trans
+
 def get_header_info(path_to_file, expression):
     """
     :param path_to_file: path to the fits file
@@ -123,6 +196,131 @@ def get_header_info(path_to_file, expression):
     
     return result_value
 
+def _wavelength_from_wcs_header(header):
+    """
+    Build a wavelength array from linear WCS keywords in the primary header.
+    Expects CRVAL1 with either CDELT1 or CD1_1 and NAXIS1.
+    """
+    crval1 = header.get("CRVAL1")
+    cdelt1 = header.get("CDELT1", header.get("CD1_1"))
+    crpix1 = header.get("CRPIX1", 1.0)
+    naxis1 = header.get("NAXIS1")
+
+    if crval1 is None or cdelt1 is None or naxis1 is None:
+        raise KeyError("Missing linear wavelength WCS keywords (CRVAL1/CDELT1(or CD1_1)/NAXIS1)")
+
+    pixels = np.arange(int(naxis1), dtype=float) + 1.0
+    return crval1 + (pixels - float(crpix1)) * float(cdelt1)
+
+def _wavelength_from_harps_drs_header(header, data_len=None):
+    """
+    Build HARPS wavelengths from DRS polynomial coefficients (same approach
+    as reduction.py/build_HARPS_wavelengths).
+    """
+    degree = int(header["HIERARCH ESO DRS CAL TH DEG LL"])
+    n_orders = int(header.get("HIERARCH ESO DRS CAL LOC NBO", 72))
+    n_pix = 4096
+
+    x = np.empty((degree + 1, n_pix), dtype=np.int64)
+    x[0].fill(1)
+    x[1] = np.arange(n_pix)
+    for i in range(1, degree):
+        x[i + 1] = x[i] * x[1]
+
+    coeff = np.reshape(
+        [header["HIERARCH ESO DRS CAL TH COEFF LL" + str(i)] for i in range(n_orders * (degree + 1))],
+        (n_orders, degree + 1),
+    )
+
+    waves_air = np.dot(coeff, x)
+    if pyasl is not None:
+        waves = pyasl.airtovac2(waves_air)
+    else:
+        # Keep air wavelengths when PyAstronomy is unavailable.
+        waves = waves_air
+
+    waves_flat = np.asarray(waves, dtype=float).reshape(-1)
+    if data_len is None:
+        return waves_flat
+
+    if waves_flat.size == int(data_len):
+        return waves_flat
+
+    raise ValueError(
+        "HARPS DRS wavelength size mismatch: built {} values, expected {}".format(
+            waves_flat.size,
+            int(data_len),
+        )
+    )
+
+def _find_column_in_hdul(hdul, candidate_names):
+    """
+    Search all HDUs for a table column matching one of candidate names.
+    Matching is case-insensitive and returns the first hit.
+    """
+    wanted = {str(name).upper() for name in candidate_names}
+    for hdu in hdul:
+        data = getattr(hdu, "data", None)
+        names = getattr(data, "names", None)
+        if not names:
+            continue
+        # Keep original name mapping so we can index with the exact column key.
+        by_upper = {str(col).upper(): col for col in names}
+        for key in wanted:
+            if key in by_upper:
+                return data[by_upper[key]]
+    return None
+
+def _estimate_bin_width_from_wave(waves):
+    """
+    Robust bin-width estimator from wavelength sampling.
+    """
+    waves = np.asarray(waves, dtype=float)
+    if waves.size < 2:
+        raise ValueError("Cannot estimate bin width from fewer than 2 wavelength points")
+    diffs = np.diff(waves)
+    finite = diffs[np.isfinite(diffs)]
+    finite = finite[np.abs(finite) > 0]
+    if finite.size == 0:
+        raise ValueError("Cannot estimate bin width from degenerate wavelength array")
+    return float(np.median(np.abs(finite)))
+
+def _get_resolution_and_binwidth(path_to_file, waves=None):
+    """
+    Get spectral resolution and bin width with broad header support.
+    Falls back to per-instrument defaults and wavelength-derived binning.
+    """
+    instrument_family = _detect_instrument_family(path_to_file)
+
+    resolution = _first_header_value(path_to_file, [
+        "SPEC_RES",
+        "SPECRES",
+        "HIERARCH CARACAL RESOLUTION",
+        "HIERARCH CAHA INS SPEC RES",
+        "HIERARCH ESO DRS SPEC RES",
+        "HIERARCH ESO INS SPEC RES",
+        "HIERARCH ESO INS RESOL",
+    ], default=None)
+    if resolution is None:
+        resolution = default_resolution_by_instrument.get(
+            instrument_family,
+            default_resolution_by_instrument["UNKNOWN"],
+        )
+
+    bin_width = _first_header_value(path_to_file, [
+        "SPEC_BIN",
+        "CDELT1",
+        "CD1_1",
+        "HIERARCH CARACAL SPEC BIN",
+    ], default=None)
+
+    if bin_width is None:
+        if waves is None:
+            waves = get_data(path_to_file, "WAVE")
+        bin_width = _estimate_bin_width_from_wave(waves)
+
+    return float(resolution), float(bin_width)
+
 def get_data(path_to_file, expression, fits_level = 1):
     """
     :param path_to_file: path to the fits file
@@ -131,20 +329,66 @@ def get_data(path_to_file, expression, fits_level = 1):
     :return value: header value returned
     """
     hdul = fits.open(path_to_file)
-    result_data = hdul[fits_level].data[expression]
-    
-    #Soar Spectra have only flux values:
     try:
-        len(result_data)
-    except:
-        #Is SOAR spectrum
-        result_data = hdul[fits_level].data
-        
-    hdul.close()
-    if len(result_data)==1:
-        return result_data[0]
-    else:
-        return result_data
+        # Try to read the requested expression from the configured data extension.
+        result_data = hdul[fits_level].data[expression]
+
+        # SOAR-like spectra can store only a plain array instead of named columns.
+        try:
+            len(result_data)
+        except:
+            result_data = hdul[fits_level].data
+
+        if len(result_data)==1:
+            return result_data[0]
+        else:
+            return result_data
+    except Exception:
+        expr_upper = str(expression).upper()
+
+        # Generic table fallbacks (useful for CARMENES/CARACAL naming).
+        if expr_upper == "WAVE":
+            alt_wave = _find_column_in_hdul(
+                hdul,
+                ["WAVE", "WAVE_AIR", "WAVE_VAC", "WAVELENGTH", "LAMBDA", "LAMBDA_AIR", "LAMBDA_VAC", "WVL"],
+            )
+            if alt_wave is not None:
+                return alt_wave
+
+        if expr_upper == "FLUX":
+            alt_flux = _find_column_in_hdul(
+                hdul,
+                ["FLUX", "SPEC", "SPECTRUM", "SCIENCE", "FLUX_CAL"],
+            )
+            if alt_flux is not None:
+                return alt_flux
+
+        if expr_upper in ("ERR", "ERROR"):
+            alt_err = _find_column_in_hdul(
+                hdul,
+                ["ERR", "ERROR", "SIG", "SIGMA", "E_FLUX", "FLUX_ERR"],
+            )
+            if alt_err is not None:
+                return alt_err
+
+        # HARPS-like files: try DRS polynomial wavelength solution first.
+        if expr_upper == "WAVE":
+            data_len = None
+            if hdul[0].data is not None:
+                data_len = np.asarray(hdul[0].data).size
+            try:
+                return _wavelength_from_harps_drs_header(hdul[0].header, data_len=data_len)
+            except Exception:
+                # HARPS/NIRPS S1D-like files: fallback to linear WCS from header.
+                return _wavelength_from_wcs_header(hdul[0].header)
+
+        # Fallback flux for 1D primary-image spectra.
+        if expr_upper == "FLUX" and hdul[0].data is not None:
+            return np.array(hdul[0].data)
+
+        raise
+    finally:
+        hdul.close()
 
 def gaussian(x, mu, sig):
     return np.exp(-np.power(x - mu, 2.) / (2 * np.power(sig, 2.)))
@@ -170,9 +414,7 @@ def create_LSF_file(filepath, telescope):
         bin_width = get_header_info(filepath,"CDELT1")
     else:    
         waves_target = get_data(filepath,"WAVE")
-    
-        resol = get_header_info(filepath,"SPEC_RES")
-        bin_width = get_header_info(filepath,"SPEC_BIN")
+        resol, bin_width = _get_resolution_and_binwidth(filepath, waves=waves_target)
     
     
     FWHMs = np.round(waves_target/resol/bin_width,4)
@@ -218,13 +460,15 @@ def get_FWHM(path_to_fits,min_wlg, max_wlg,palomar,wvlng_to_mic):
             try:
                 FWHM_wlg_unit = float(get_header_info(path_to_fits,"SKYFWHM"))
                 
-            except:
+            except Exception as e:
+                print("[DEBUG] get_FWHM SKYFWHM fallback:", e)
                 nam = get_header_info(path_to_fits,"FPA")
                 if "DBSP" in nam:
                     FWHM_wlg_unit = 6
             try:
                 binsize = get_header_info(path_to_fits,"CDELT1")
-            except:
+            except Exception as e:
+                print("[DEBUG] get_FWHM CDELT1 fallback:", e)
                 binsize = get_header_info(path_to_fits,"CD1_1")
                 if binsize == 1.:
                     try:
@@ -234,7 +478,8 @@ def get_FWHM(path_to_fits,min_wlg, max_wlg,palomar,wvlng_to_mic):
                         pass
                        
             FWHM = (min_wlg + max_wlg)/2/(7400/FWHM_wlg_unit)/(binsize*wvlng_to_mic)
-        except:
+        except Exception as e:
+            print("[DEBUG] get_FWHM Palomar-like branch failed, trying DuPont/Keck/SOAR:", e)
              # Is DuPont
             if "DuPont" in get_header_info(path_to_fits,"TELESCOP"):
                 FWHM_wlg_unit = 8
@@ -245,7 +490,8 @@ def get_FWHM(path_to_fits,min_wlg, max_wlg,palomar,wvlng_to_mic):
                 resol = get_header_info(path_to_fits,"SPECRES")
                 try:
                     binsize = get_header_info(path_to_fits,"CDELT1")
-                except:
+                except Exception as e:
+                    print("[DEBUG] get_FWHM Keck CDELT1 fallback:", e)
                     binsize = get_header_info(path_to_fits,"CD1_1")
                 FWHM = (min_wlg + max_wlg)/2 /resol /(binsize*wvlng_to_mic)
             #is SOAR
@@ -254,8 +500,8 @@ def get_FWHM(path_to_fits,min_wlg, max_wlg,palomar,wvlng_to_mic):
                 resol = 5880
                 FWHM = (min_wlg + max_wlg) / 2 / resol / (binsize * wvlng_to_mic)
     else: 
-        resol = get_header_info(path_to_fits,"SPEC_RES")
-        binsize = get_header_info(path_to_fits,"SPEC_BIN")
+        waves_for_bin = get_data(path_to_fits, "WAVE")
+        resol, binsize = _get_resolution_and_binwidth(path_to_fits, waves=waves_for_bin)
         FWHM = (min_wlg + max_wlg)/2 /resol /(binsize*wvlng_to_mic)
     
     #check, if dealing with a longer spectrum (in order to activate variability with wavelength)
@@ -318,9 +564,9 @@ def get_inclusion_region(z,wave_min=0,wave_max=4, is_Dupont = False):
                 lower_bound = abs(telluric_regions[0,:][allowed_tellurics][0]-telluric_regions[0,:][allowed_tellurics][1])
                 upper_bound = abs(telluric_regions[0,:][allowed_tellurics][-1]-telluric_regions[0,:][allowed_tellurics][-2])
                 if upper_bound<lower_bound:
-                    np.delete(allowed_tellurics,0)
+                    allowed_tellurics = np.delete(allowed_tellurics,0)
                 else:
-                    np.delete(allowed_tellurics,-1)
+                    allowed_tellurics = np.delete(allowed_tellurics,-1)
     
     #if allowed_tellurics no empyt
     try:
@@ -369,8 +615,16 @@ def get_inclusion_region(z,wave_min=0,wave_max=4, is_Dupont = False):
     #inclusion_region  = [[0.6825,0.695],[0.7585,0.764],[0.81,0.815],[0.91,0.92],[0.935,0.94]]
     #inclusion_region[-1]=[1.26,1.268]
     if len(inclusion_region)==0:
-        inclusion_region=[[0.7605, 0.770]]
-    inclusion_region.append([0.7575, 0.765])
+        # bounds-aware fallback windows for optical data
+        for lo, hi in ([0.6846, 0.6972], [0.7570, 0.7710], [0.9050, 0.9210]):
+            if lo >= wave_min and hi <= wave_max:
+                inclusion_region.append([lo, hi])
+
+    # Keep a narrow O2 A fallback only when it lies inside the actual spectrum range.
+    if 0.7575 >= wave_min and 0.765 <= wave_max:
+        inclusion_region.append([0.7575, 0.765])
+
+    acceptable = len(inclusion_region) >= 1
     return inclusion_region, acceptable
 
 
@@ -514,7 +768,7 @@ def save_plot(path_to_tac_file,wlg_to_microns, palomar, path_to_output,fitting_r
 
 if not os.path.exists(path_to_final_results):
     os.makedirs(path_to_final_results)
-def save_result(path_to_file,path_to_output, SOAR_tel = False,Pal_no_err = False):
+def save_result(path_to_file,path_to_output, SOAR_tel = False,Pal_no_err = False, output_index=None):
     """
     :param path_to_file: The path give in the list of spectra
     :param path_to_output: path to the directory where the output is saves
@@ -522,16 +776,45 @@ def save_result(path_to_file,path_to_output, SOAR_tel = False,Pal_no_err = False
     file_name = path_to_file.split("/")[-1]
     
     name_results = file_name.replace(".fits", "_TAC.fits")
-   
-    if os.path.exists(path_to_output+"/"+name_results):
-        shutil.copy(path_to_output+"/"+name_results,path_to_final_results)
+    source_fits_candidates = [name_results]
+    if output_index is not None:
+        source_fits_candidates.append("Spectrum_"+str(output_index)+"_TAC.fits")
+
+    source_fits = None
+    for candidate in source_fits_candidates:
+        candidate_path = os.path.join(path_to_output, candidate)
+        if os.path.exists(candidate_path):
+            source_fits = candidate_path
+            break
+
+    if source_fits is not None:
+        shutil.copy(source_fits, os.path.join(path_to_final_results, name_results))
     else:
         #in this case, we must add the table to the fits file
         name_results_table = file_name.replace(".fits", "_TAC.dat")
+        source_table_candidates = [name_results_table]
+        if output_index is not None:
+            source_table_candidates.append("Spectrum_"+str(output_index)+"_TAC.dat")
+
+        source_table = None
+        for candidate in source_table_candidates:
+            candidate_path = os.path.join(path_to_output, candidate)
+            if os.path.exists(candidate_path):
+                source_table = candidate_path
+                break
+
+        if source_table is None:
+            raise FileNotFoundError(
+                "No TAC output found in {} (tried {})".format(
+                    path_to_output,
+                    ", ".join(source_fits_candidates + source_table_candidates),
+                )
+            )
+
         name_results_tac = file_name.replace(".fits", "_TAC.fits")
         
         hdul_file = fits.open(path_to_file)
-        table_tac = np.genfromtxt(path_to_output+"/"+name_results_table)
+        table_tac = np.genfromtxt(source_table)
         header = hdul_file[0].header
         
             
@@ -681,7 +964,7 @@ def round_number(x, base=3):
         rounded = str(rounded)
     return rounded
 
-def get_weather_data(path_to_file, telescope_SOAR=False, telescope_DuPont = False):
+def get_weather_data(path_to_file, telescope_SOAR=False, telescope_DuPont = False, telescope_Palomar=False):
     """
     This program extrapolates the weatherdata
     :return temp, pres, hum: 
@@ -690,6 +973,8 @@ def get_weather_data(path_to_file, telescope_SOAR=False, telescope_DuPont = Fals
         temp = get_header_info(path_to_file,"ENVTEM")
     
     elif telescope_DuPont:
+        if path_DuPont_weather is None:
+            raise ValueError("path_DuPont_weather is not set for DuPont mode")
         weather_data = pd.read_table(path_DuPont_weather,header = 0,names = [1,2,3,4,5,6,7,8,9,10,11,12,13,14])
         weather_time_stps = Time(list(weather_data[3]),scale='utc').unix
         # time of observations
@@ -704,7 +989,9 @@ def get_weather_data(path_to_file, telescope_SOAR=False, telescope_DuPont = Fals
         
         pres = weather_data[10][idx] * 33.86389
         
-    else:
+    elif telescope_Palomar:
+        if path_p60 is None or path_p200 is None:
+            raise ValueError("path_p60/path_p200 are not set for Palomar mode")
         height_palomar = 1712
         try:
             t_obs  = Time(get_header_info(path_to_file,"DATE-OBS"),format='isot', scale='utc')
@@ -736,8 +1023,42 @@ def get_weather_data(path_to_file, telescope_SOAR=False, telescope_DuPont = Fals
         So if you take the reported numbers and subtract 186.2, you should get the actual pressure at the 60in telescope.
         """
         pres = weather_p60["baro_pressure"][idx_p60]-186.2
-        
-        
+
+    else:
+        # Generic ESO/HARPS/NIRPS/CARMENES fallback (no external weather file)
+        temp = _first_header_value(path_to_file, [
+            "HIERARCH ESO TEL AMBI TEMP", "ESO TEL AMBI TEMP", "TEL AMBI TEMP",
+            "HIERARCH CAHA GEN AMBI TEMPERATURE"
+        ], default=10.0)
+
+        pres_start = _first_header_value(path_to_file, [
+            "HIERARCH ESO TEL AMBI PRES START", "ESO TEL AMBI PRES START", "TEL AMBI PRES START"
+        ], default=None)
+        pres_end = _first_header_value(path_to_file, [
+            "HIERARCH ESO TEL AMBI PRES END", "ESO TEL AMBI PRES END", "TEL AMBI PRES END"
+        ], default=None)
+        if pres_start is not None and pres_end is not None:
+            pres = 0.5 * (pres_start + pres_end)
+        elif pres_start is not None:
+            pres = pres_start
+        elif pres_end is not None:
+            pres = pres_end
+        else:
+            pres = _first_header_value(path_to_file, [
+                "HIERARCH ESO TEL AMBI PRES", "ESO TEL AMBI PRES", "TEL AMBI PRES",
+                "HIERARCH CAHA GEN AMBI PRESSURE"
+            ], default=743.0)
+
+        rhum = _first_header_value(path_to_file, [
+            "HIERARCH ESO TEL AMBI RHUM", "ESO TEL AMBI RHUM", "TEL AMBI RHUM",
+            "HIERARCH CAHA GEN AMBI RHUM"
+        ], default=20.0)
+
+        m1 = _first_header_value(path_to_file, [
+            "HIERARCH ESO TEL TH M1 TEMP", "ESO TEL TH M1 TEMP", "TEL TH M1 TEMP"
+        ], default=temp)
+        mirror_temp = m1
+
     return float(temp), float(mirror_temp), float(pres), float(rhum)
     
 
@@ -1141,7 +1462,8 @@ def invoke_molecfit(i):
         is_DuPont = False
         is_Keck = False
         is_Palomar_no_err = False
-    except:
+    except Exception as e:
+        print("[DEBUG] invoke_molecfit WAVELMIN/WAVELMAX branch failed:", e)
         try:
             # check, if dealing with SOAR or Palomar
             is_Palomar = False
@@ -1156,7 +1478,8 @@ def invoke_molecfit(i):
                      is_DuPont = True
                 elif "Keck" in get_header_info(path, "TELESCOP"):
                      is_Keck = True
-            except:
+            except Exception as e:
+                print("[DEBUG] invoke_molecfit TELESCOP classifier failed (branch 1):", e)
                 pass
 
             # this is, how to deal with Palomar Fits File
@@ -1181,10 +1504,14 @@ def invoke_molecfit(i):
             lambda_min = wavelengths_array[0]
             lambda_max = wavelengths_array[-1]
 
-            if not is_SOAR and not is_DuPont and not is_Keck:
+            telescope_name = str(_first_header_raw(path, ["TELESCOP"], default=""))
+            instrument_name = str(_first_header_raw(path, ["INSTRUME"], default=""))
+            if (not is_SOAR and not is_DuPont and not is_Keck and
+                ("Palomar" in telescope_name or "P200" in telescope_name or "P60" in telescope_name or "DBSP" in instrument_name)):
                 is_Palomar = True
 
-        except:
+        except Exception as e:
+            print("[DEBUG] invoke_molecfit linear-header parsing failed, trying multispec:", e)
             try:
                 is_Palomar = False
                 is_DuPont = False
@@ -1198,7 +1525,8 @@ def invoke_molecfit(i):
                         is_DuPont = True
                     elif "Keck" in get_header_info(path, "TELESCOP"):
                         is_Keck = True
-                except:
+                except Exception as e:
+                    print("[DEBUG] invoke_molecfit TELESCOP classifier failed (branch 2):", e)
                     pass
                 load_spec = readmultispec(path)
                 wavelengths_array = load_spec["wavelen"]
@@ -1213,9 +1541,13 @@ def invoke_molecfit(i):
                         flux_error_array = 3e18*flux_error_array/wavelengths_array**2
                 lambda_min = wavelengths_array[0]
                 lambda_max = wavelengths_array[-1]
-                if not is_SOAR and not is_DuPont and not is_Keck:
+                telescope_name = str(_first_header_raw(path, ["TELESCOP"], default=""))
+                instrument_name = str(_first_header_raw(path, ["INSTRUME"], default=""))
+                if (not is_SOAR and not is_DuPont and not is_Keck and
+                    ("Palomar" in telescope_name or "P200" in telescope_name or "P60" in telescope_name or "DBSP" in instrument_name)):
                     is_Palomar = True
-            except:
+            except Exception as e:
+                print("[DEBUG] invoke_molecfit multispec parsing failed:", e)
                 Completion_successfull = False
                 #skip the rest of the for loop
                 print(path, " exit 2")
@@ -1224,12 +1556,32 @@ def invoke_molecfit(i):
         data = fits.getdata(path)
         if len(data)<2 or len(data)>10:
             is_Palomar_no_err = True
+
+    is_generic_ascii = False
+    if not is_Palomar and not is_SOAR and not is_DuPont and not is_Keck:
+        # For HARPS/NIRPS/CARMENES-like S1D files, writing a temporary ASCII
+        # avoids molecfit crashes when FITS WAVE extension is absent.
+        try:
+            wavelengths_array = get_data(path, "WAVE")
+            flux_array = get_data(path, "FLUX")
+            try:
+                flux_error_array = get_data(path, "ERR")
+            except Exception:
+                flux_error_array = np.maximum(np.abs(np.asarray(flux_array, dtype=float)) * 0.01, 1e-20)
+            save_array_as_ASCII(path, wavelengths_array, flux_array, flux_error_array)
+            is_generic_ascii = True
+        except Exception as e:
+            print("[DEBUG] invoke_molecfit generic ASCII conversion failed:", e)
+
     if is_Palomar and not is_Palomar_no_err:
         save_array_as_ASCII(path,wavelengths_array,flux_array, flux_error_array)
     if is_SOAR or is_DuPont or is_Keck or is_Palomar_no_err:
         save_array_as_ASCII_no_err(path,wavelengths_array,flux_array)
+
+    use_ascii_input = is_Palomar or is_SOAR or is_DuPont or is_Keck or is_generic_ascii
+
     #get the wavelength units
-    wlgtomicron = get_wlgtomicron(path, is_Palomar or is_SOAR or is_DuPont or is_Keck)
+    wlgtomicron = get_wlgtomicron(path, use_ascii_input)
                             
     #in this case, the units could not be determined
     if wlgtomicron == False:
@@ -1252,7 +1604,7 @@ def invoke_molecfit(i):
     #replace the input spectrum
     #Notice: this creates a new copy of the parameter file
         
-    if is_Palomar or is_SOAR or is_DuPont or is_Keck:
+    if use_ascii_input:
         replace(path_to_program+name_gen_par,path_to_program+name_temp_par, "#path_to_fits", \
                 path.replace(".fits",".dat"))
     else:
@@ -1267,6 +1619,12 @@ def invoke_molecfit(i):
                 "#fit_molec: 1 1")
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "# fit_molec: 1 0 0 0 1", \
                 "fit_molec: 1 0 0 0 1")
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "relcol: 1.0 1.0", \
+                "relcol: 1.0 1.06 1.0 1.0 1.0")
+
+    if is_generic_ascii:
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "columns: WAVE FLUX ERR QUAL", \
+                "columns: WAVE FLUX ERR NULL")
     if is_DuPont:
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "list_molec: H2O CO2 CO CH4 O2", \
                 "list_molec: O2")
@@ -1302,6 +1660,59 @@ def invoke_molecfit(i):
             
     replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "#output_name", \
             "Spectrum_"+str(i))
+
+    # For generic non-Palomar formats (e.g., HARPS/NIRPS/CARMENES), inject
+    # weather and site parameters explicitly to avoid keyword mismatches.
+    if not is_Palomar and not is_SOAR and not is_DuPont and not is_Keck:
+        mjd_obs = _first_header_value(path, ["MJD-OBS", "HIERARCH CARACAL MJD-OBS"], default=None)
+        if mjd_obs is None:
+            date_obs_generic = _first_header_raw(path, ["DATE-OBS"], default=None)
+            if date_obs_generic is not None:
+                mjd_obs = Time(str(date_obs_generic), format="isot").mjd
+        if mjd_obs is not None:
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "obsdate#:", "obsdate: "+str(mjd_obs))
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "obsdate_key: MJD-OBS", "obsdate_key: NONE")
+
+        utc_sec = _first_header_value(path, ["UTC"], default=None)
+        if utc_sec is None and mjd_obs is not None:
+            utc_sec = int((mjd_obs - int(mjd_obs)) * 24 * 3600)
+        if utc_sec is not None:
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "utc#:", "utc: "+str(utc_sec))
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "utc_key: UTC", "utc_key: NONE")
+
+        telalt = _first_header_value(path, ["HIERARCH ESO TEL ALT", "HIERARCH CAHA TEL POS EL_START"], default=None)
+        if telalt is None:
+            airmass_gen = _first_header_value(path, ["AIRMASS", "HIERARCH ESO TEL AIRM START"], default=None)
+            if airmass_gen is not None and airmass_gen > 0:
+                telalt = 90 - 360/(2*np.pi)*float(mpm.asec(float(airmass_gen)))
+        if telalt is not None:
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "telalt#:", "telalt: "+str(telalt))
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "telalt_key: ESO TEL ALT", "telalt_key: NONE")
+
+        geoelev = _first_header_value(path, ["HIERARCH ESO TEL GEOELEV", "HIERARCH CAHA TEL GEOELEV"], default=None)
+        if geoelev is not None:
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "geoelev#:", "geoelev: "+str(geoelev))
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "geoelev_key: ESO TEL GEOELEV", "geoelev_key: NONE")
+
+        longitude = _first_header_value(path, ["HIERARCH ESO TEL GEOLON", "HIERARCH CAHA TEL GEOLON"], default=None)
+        if longitude is not None:
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "longitude#:", "longitude: "+str(longitude))
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "longitude_key: ESO TEL GEOLON", "longitude_key: NONE")
+
+        latitude = _first_header_value(path, ["HIERARCH ESO TEL GEOLAT", "HIERARCH CAHA TEL GEOLAT"], default=None)
+        if latitude is not None:
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "latitude#:", "latitude: "+str(latitude))
+            replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "latitude_key: ESO TEL GEOLAT", "latitude_key: NONE")
+
+        temp, mir_temp, pressure, humid = get_weather_data(path)
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "temp#:", "temp: "+str(temp))
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "temp_key: ESO TEL AMBI TEMP", "temp_key: NONE")
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "pres#:", "pres: "+str(pressure))
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "pres_key: ESO TEL AMBI PRES START", "pres_key: NONE")
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "rhum#:", "rhum: "+str(humid))
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "rhum_key: ESO TEL AMBI RHUM", "rhum_key: NONE")
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "m1temp#:", "m1temp: "+str(mir_temp))
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "m1temp_key: ESO TEL TH M1 TEMP", "m1temp_key: NONE")
 
 
     ###
@@ -1366,10 +1777,10 @@ def invoke_molecfit(i):
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "temp_key: ESO TEL AMBI TEMP", "temp_key: NONE")
                 
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "pres#:", "pres: "+str(pressure))
-        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "temp_key: ESO TEL AMBI TEMP", "temp_key: NONE")
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "pres_key: ESO TEL AMBI PRES START", "pres_key: NONE")
                 
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "rhum#:", "rhum: "+str(humid))
-        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "temp_key: ESO TEL AMBI TEMP", "temp_key: NONE")
+        replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "rhum_key: ESO TEL AMBI RHUM", "rhum_key: NONE")
                 
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "m1temp#:", "m1temp: "+str(mir_temp))
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "m1temp_key: ESO TEL TH M1 TEMP", "m1temp_key: NONE")
@@ -1428,12 +1839,12 @@ def invoke_molecfit(i):
                 "temp_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "pres#:", "pres: " + str(pressure))
-        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "temp_key: ESO TEL AMBI TEMP",
-                "temp_key: NONE")
+        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "pres_key: ESO TEL AMBI PRES START",
+            "pres_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "rhum#:", "rhum: " + str(humid))
-        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "temp_key: ESO TEL AMBI TEMP",
-                "temp_key: NONE")
+        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "rhum_key: ESO TEL AMBI RHUM",
+            "rhum_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "m1temp#:",
                 "m1temp: " + str(mir_temp))
@@ -1486,12 +1897,12 @@ def invoke_molecfit(i):
                 "temp_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "pres#:", "pres: " + str(pressure))
-        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "temp_key: ESO TEL AMBI TEMP",
-                "temp_key: NONE")
+        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "pres_key: ESO TEL AMBI PRES START",
+            "pres_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "rhum#:", "rhum: " + str(humid))
-        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "temp_key: ESO TEL AMBI TEMP",
-                "temp_key: NONE")
+        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "rhum_key: ESO TEL AMBI RHUM",
+            "rhum_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "m1temp#:",
                 "m1temp: " + str(mir_temp))
@@ -1547,12 +1958,12 @@ def invoke_molecfit(i):
                 "temp_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "pres#:", "pres: " + str(pressure))
-        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "temp_key: ESO TEL AMBI TEMP",
-                "temp_key: NONE")
+        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "pres_key: ESO TEL AMBI PRES START",
+            "pres_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "rhum#:", "rhum: " + str(humid))
-        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "temp_key: ESO TEL AMBI TEMP",
-                "temp_key: NONE")
+        replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "rhum_key: ESO TEL AMBI RHUM",
+            "rhum_key: NONE")
 
         replace(path_to_program + name_temp_par, path_to_program + name_temp_par, "m1temp#:",
                 "m1temp: " + str(mir_temp))
@@ -1569,7 +1980,9 @@ def invoke_molecfit(i):
     (regions of intrinsic emission from science
     target)
     """
-    np.savetxt(path_to_program+"/exclude_"+str(i)+".dat",Exluding)
+    exclude_file_path = path_to_program+"/exclude_"+str(i)+".dat"
+    include_file_path = path_to_program+"/include_"+str(i)+".dat"
+    np.savetxt(exclude_file_path,Exluding)
     
     Including = get_inclusion_region(list_of_spectra["z"][i], lambda_min,lambda_max, is_DuPont)
     
@@ -1583,7 +1996,7 @@ def invoke_molecfit(i):
     #check, if the inclusion file has enough regions, else write down the file and look at it manually
     
     if Including[1]: 
-        np.savetxt(path_to_program+"/include_"+str(i)+".dat",Including[0])
+        np.savetxt(include_file_path,Including[0])
         
     else:
         Completion_successfull = False
@@ -1602,13 +2015,13 @@ def invoke_molecfit(i):
         #replace the resolution
         try:
             res_FWHM, var_wlg = get_FWHM(path,lambda_min,lambda_max,is_Palomar or is_SOAR or is_DuPont or is_Keck,wlgtomicron)
-        except:
+        except Exception as e:
             Completion_successfull = False
             #skip the rest of the for loop
             remove(path_to_program+name_temp_par)
-            remove(path_to_program+"/exclude_"+str(i)+".dat")
-            remove(path_to_program+"/include_"+str(i)+".dat")
-            return Completion_successfull , path+" #Problem: strange flux values"
+            remove(exclude_file_path)
+            remove(include_file_path)
+            return Completion_successfull , path+f" #Problem: {e}"
         
         replace(path_to_program+name_temp_par,path_to_program+name_temp_par, "res_gauss: #res_gauss", \
                 "res_gauss: "+str(res_FWHM))
@@ -1627,14 +2040,21 @@ def invoke_molecfit(i):
     ### Save the results in a seperate directory
     ###
     
-    save_result(path,path_to_results+str(i)+"_"+date_string, is_SOAR or is_DuPont or is_Keck,is_Palomar_no_err)
+    save_result(path,path_to_results+str(i)+"_"+date_string, is_SOAR or is_DuPont or is_Keck,is_Palomar_no_err, output_index=i)
+
+    # Persist fit-range files in output folder for notebook diagnostics.
+    output_dir_i = path_to_results+str(i)+"_"+date_string
+    if os.path.exists(include_file_path):
+        shutil.copy(include_file_path, output_dir_i+"/include_"+str(i)+".dat")
+    if os.path.exists(exclude_file_path):
+        shutil.copy(exclude_file_path, output_dir_i+"/exclude_"+str(i)+".dat")
     
     
     #save the results for FWHM in a list
     
     
     ##get the signal to noise
-    if is_Palomar or is_SOAR or is_DuPont or is_Keck:
+    if use_ascii_input:
         path_final_file = path_to_results+str(i)+"_"+date_string+"/"+path.split("/")[-1].replace(".fits", "_TAC.dat")
         waves_targ = np.genfromtxt(path_final_file)[:,0]
         flux_targ = np.genfromtxt(path_final_file)[:,1]
@@ -1652,30 +2072,33 @@ def invoke_molecfit(i):
         s_n_tac = get_signal_to_noise(get_data(path_final_file,"WAVE"),get_data(path_final_file,"tacflux"))
     
     ##do a rough quality check
-    
-    Master_trans_spec = np.genfromtxt(path_master_trans)
-    wave_mas = Master_trans_spec[:,0]
-    trans_mas = Master_trans_spec[:,1]
-    
-    
-    waves_targ, trans_targ = get_trans_spectrum(path_final_file,is_Palomar, is_SOAR, is_DuPont, is_Keck)
-    O_2, H2_O = scales(1000*wlgtomicron*waves_targ,wave_mas,trans_targ,trans_mas)
-    
-    O_2_accept = False
-    H2_O_accept = False
-    if (abs(np.mean(O_2)-1)<0.2 and test_region(O_2)) or len(O_2)==0:
-        O_2_accept = True
-    if test_region(H2_O)or len(H2_O)==0:
-        H2_O_accept = True
-        
-    if H2_O_accept and O_2_accept:
-        quality_label = 0
-    elif H2_O_accept and not O_2_accept:
-        quality_label = 1
-    elif not H2_O_accept and  O_2_accept:
-        quality_label = 2
-    elif not H2_O_accept and not O_2_accept:
-        quality_label = 3
+    master_trans_path = _get_master_transmission_path(path)
+    if master_trans_path is not None and os.path.exists(master_trans_path):
+        Master_trans_spec = np.genfromtxt(master_trans_path)
+        wave_mas = Master_trans_spec[:,0]
+        trans_mas = Master_trans_spec[:,1]
+
+        waves_targ, trans_targ = get_trans_spectrum(path_final_file,use_ascii_input, is_SOAR, is_DuPont, is_Keck)
+        O_2, H2_O = scales(1000*wlgtomicron*waves_targ,wave_mas,trans_targ,trans_mas)
+
+        O_2_accept = False
+        H2_O_accept = False
+        if (abs(np.mean(O_2)-1)<0.2 and test_region(O_2)) or len(O_2)==0:
+            O_2_accept = True
+        if test_region(H2_O)or len(H2_O)==0:
+            H2_O_accept = True
+
+        if H2_O_accept and O_2_accept:
+            quality_label = 0
+        elif H2_O_accept and not O_2_accept:
+            quality_label = 1
+        elif not H2_O_accept and  O_2_accept:
+            quality_label = 2
+        elif not H2_O_accept and not O_2_accept:
+            quality_label = 3
+    else:
+        # -1 means "not evaluated" (no matching master transmission template).
+        quality_label = -1
         
     
     ##get other parameters
@@ -1693,14 +2116,14 @@ def invoke_molecfit(i):
         
         
     remove(path_to_program+name_temp_par)
-    remove(path_to_program+"/exclude_"+str(i)+".dat")
-    remove(path_to_program+"/include_"+str(i)+".dat")
+    remove(exclude_file_path)
+    remove(include_file_path)
                 
     if Own_LSF_input:
         remove(path_kernel_file)
 
     Completion_successfull = True
-    return Completion_successfull, returner,[path, wlgtomicron, is_Palomar or is_SOAR or is_DuPont or is_Keck,path_to_results+str(i)+"_"+date_string,Including[0], i]
+    return Completion_successfull, returner,[path, wlgtomicron, use_ascii_input,path_to_results+str(i)+"_"+date_string,Including[0], i]
 
 
 if __name__ == '__main__':
