@@ -26,7 +26,6 @@ import csv
 import pandas as pd
 import mpmath as mpm
 import glob
-import re
 
 
 SPEED_OF_LIGHT_M_S = 299792458.0
@@ -47,15 +46,10 @@ path_to_gen_par = "/home/amasson/data/molecfit_wrapper/Parameter_Files/generic_p
 name_gen_par = "/"+path_to_gen_par.split("/")[-1]
 
 #2) <path to list of spectra file>
-path_to_list = "/home/amasson/data/molecfit_wrapper/Automated_Program/Kepler-91b_CARMENES_02-07-2019_CARMENES_NIR_ORDERWISE.csv"
+path_to_list = "/home/amasson/data/molecfit_wrapper/Automated_Program/Kepler-91b_CARMENES_02-07-2019_CARMENES_NIR.csv"
 # Explicit wrapper setup for one homogeneous input CSV.
 # Supported values: HARPS, NIRPS, ESPRESSO, CARMENES_VIS, CARMENES_NIR
 configured_channel_type = "CARMENES_NIR"
-
-# CARMENES-specific two-pass orderwise mode:
-# pass 1 -> fit each order independently to estimate molecular columns,
-# pass 2 -> combine columns per observation and run calctrans per order.
-carmenes_orderwise_mode = True
 
 #3) <path to where the software tools >
 path_to_molecfit = "/home/amasson/data/molecfit/bin/"
@@ -220,41 +214,21 @@ path_kernel_file = path_to_program + "/own_input_kernel.dat"
 
 
 if ".csv" in path_to_list:
-    # Flexible CSV parsing with optional orderwise metadata columns.
-    # Supported columns (case-insensitive):
-    # - path or file (required)
-    # - berv (optional)
-    # - obs_key (optional, used for order grouping)
-    # - order_index (optional)
-    raw_csv = pd.read_csv(path_to_list)
-    raw_csv.columns = [str(c).strip().lower() for c in raw_csv.columns]
-
-    path_col = None
-    for candidate in ["path", "file"]:
-        if candidate in raw_csv.columns:
-            path_col = candidate
-            break
-    if path_col is None:
-        # Fallback to first column for legacy ad-hoc CSVs.
-        path_col = raw_csv.columns[0]
-
-    list_of_spectra = pd.DataFrame()
-    list_of_spectra["path"] = raw_csv[path_col].astype(str)
-
-    if "berv" in raw_csv.columns:
-        list_of_spectra["berv"] = pd.to_numeric(raw_csv["berv"], errors="coerce")
-    else:
-        list_of_spectra["berv"] = np.nan
-
-    if "obs_key" in raw_csv.columns:
-        list_of_spectra["obs_key"] = raw_csv["obs_key"].astype(str)
-    else:
-        list_of_spectra["obs_key"] = ""
-
-    if "order_index" in raw_csv.columns:
-        list_of_spectra["order_index"] = pd.to_numeric(raw_csv["order_index"], errors="coerce")
-    else:
-        list_of_spectra["order_index"] = np.nan
+    # Read CSV positionally so both of these are accepted:
+    # path
+    # /some/file.fits
+    # and
+    # path,berv
+    # /some/file.fits,-20383.5
+    # This also tolerates a malformed one-column header like "file" followed by
+    # two-column data rows produced in ad-hoc notebooks.
+    list_of_spectra = pd.read_csv(
+        path_to_list,
+        header=0,
+        names=["path", "berv"],
+        usecols=[0, 1],
+    )
+    list_of_spectra["path"] = list_of_spectra["path"].astype(str)
 else:
     list_of_spectra = np.genfromtxt(path_to_list,dtype=["U150"],names=["path"])
 
@@ -276,39 +250,6 @@ def _get_csv_berv_m_per_s(i, path_to_file):
         )
 
     return float(berv_value)
-
-
-def _derive_obs_key_from_path(path_to_file):
-    """
-    Derive a stable observation key from per-order filenames.
-    Expected orderwise suffix pattern: *_ordNNN.fits
-    """
-    base = os.path.basename(str(path_to_file))
-    stem = base[:-5] if base.lower().endswith(".fits") else base
-    stem = re.sub(r"_ord\d+$", "", stem)
-    return stem
-
-
-def _get_obs_key(i, path_to_file):
-    if hasattr(list_of_spectra, "columns") and "obs_key" in list_of_spectra.columns:
-        val = list_of_spectra["obs_key"].iloc[i]
-        if isinstance(val, str) and val.strip() != "":
-            return val.strip()
-    return _derive_obs_key_from_path(path_to_file)
-
-
-def _is_carmenes_orderwise_mode_active():
-    family = str(configured_channel_type).strip().upper()
-    if not family.startswith("CARMENES"):
-        return False
-    if not bool(carmenes_orderwise_mode):
-        return False
-    if not hasattr(list_of_spectra, "columns"):
-        return False
-    # Activate only when CSV actually carries orderwise structure metadata.
-    has_order = "order_index" in list_of_spectra.columns and np.any(pd.notna(list_of_spectra["order_index"]))
-    has_obs_key = "obs_key" in list_of_spectra.columns and np.any(list_of_spectra["obs_key"].astype(str).str.strip() != "")
-    return bool(has_order or has_obs_key)
 
 
 def _get_header_berv_m_per_s(path_to_file):
@@ -724,14 +665,10 @@ def get_inclusion_region(wave_min=0, wave_max=4, include_windows=None, instrumen
     if include_windows is None:
         raise ValueError("include_windows must be provided explicitly for instrument '{}'".format(instrument_family))
 
-    # Clip telluric windows to the observed wavelength range.
-    # This is essential for orderwise echelle processing where each order
-    # covers only a narrow sub-range.
+    # Keep only telluric windows fully inside the observed wavelength range.
     for lo, hi in include_windows:
-        clipped_lo = max(float(lo), float(wave_min))
-        clipped_hi = min(float(hi), float(wave_max))
-        if clipped_hi - clipped_lo > 1e-4:
-            inclusion_region.append([clipped_lo, clipped_hi])
+        if lo >= wave_min and hi <= wave_max:
+            inclusion_region.append([lo, hi])
 
     acceptable = len(inclusion_region) >= 1
     return inclusion_region, acceptable
@@ -901,102 +838,6 @@ def get_results(output_dir, output_name):
         raise ValueError("Missing fit diagnostics in {}_fit.res: {}".format(output_name, ", ".join(missing)))
 
     return red_chi2,wvlg_sol_1,wvlg_sol_2
-
-
-def _parse_relative_molecular_columns_from_res(res_path, molecule_names):
-    """
-    Parse the "RELATIVE MOLECULAR GAS COLUMNS" section from a molecfit .res file.
-    Returns dict: {MOLECULE: (value, uncertainty)} for requested molecule names.
-    """
-    target = {str(m).strip().upper() for m in molecule_names}
-    parsed = {}
-    in_section = False
-
-    with open(res_path, "r") as handle:
-        for raw in handle:
-            line = raw.strip()
-            if line.startswith("RELATIVE MOLECULAR GAS COLUMNS:"):
-                in_section = True
-                continue
-            if not in_section:
-                continue
-            if line.startswith("MOLECULAR GAS COLUMNS IN PPMV"):
-                break
-            if line == "":
-                continue
-
-            match = re.match(
-                r"^([A-Za-z0-9_]+):\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\+\-\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$",
-                line,
-            )
-            if not match:
-                continue
-
-            name = match.group(1).upper()
-            if name not in target:
-                continue
-
-            value = float(match.group(2))
-            err = float(match.group(3))
-            parsed[name] = (value, err)
-
-    return parsed
-
-
-def _combine_relative_columns_by_observation(first_pass_rows, molecule_names):
-    """
-    Combine per-order molecular relative columns into one value per observation.
-    Uses inverse-variance weighting when valid uncertainties are available,
-    otherwise falls back to median.
-    Returns dict:
-      obs_key -> list of combined relcol values aligned with molecule_names.
-    """
-    grouped = {}
-    for row in first_pass_rows:
-        obs_key = row["obs_key"]
-        grouped.setdefault(obs_key, []).append(row)
-
-    combined = {}
-    for obs_key, rows in grouped.items():
-        relcol_values = []
-        for molecule in molecule_names:
-            mol = str(molecule).strip().upper()
-            vals = []
-            weights = []
-
-            for row in rows:
-                mol_map = row.get("mol_columns", {})
-                if mol not in mol_map:
-                    continue
-                value, err = mol_map[mol]
-                if not np.isfinite(value):
-                    continue
-                if np.isfinite(err) and err > 0:
-                    vals.append(value)
-                    weights.append(1.0 / (err * err))
-                else:
-                    vals.append(value)
-
-            if len(vals) == 0:
-                # Keep template default if no order constrains this molecule.
-                relcol_values.append(1.0)
-                continue
-
-            vals_arr = np.asarray(vals, dtype=float)
-            weights_arr = np.asarray(weights, dtype=float)
-            if weights_arr.size == vals_arr.size and np.all(np.isfinite(weights_arr)) and np.sum(weights_arr) > 0:
-                combined_value = float(np.sum(vals_arr * weights_arr) / np.sum(weights_arr))
-            else:
-                combined_value = float(np.median(vals_arr))
-
-            # Relative columns must be positive.
-            if not np.isfinite(combined_value) or combined_value <= 0:
-                combined_value = 1.0
-            relcol_values.append(combined_value)
-
-        combined[obs_key] = relcol_values
-
-    return combined
 
 def get_signal_to_noise(waves_target, flux_target,bin_size=20):
     """
@@ -1174,71 +1015,7 @@ def save_array_as_ASCII_with_qual(path_to_fits_file, wave_values, flux_values, f
 list_of_spectra_errors = []
 list_of_fitting_results = [["Name", "Name TAC","FWHM", "S/N raw","S/N tac","reduced chi2", "Quality","Wvlg solution 1","Wvlg solution 2"]]
 
-def _build_summary_row(path, output_dir_i, output_index):
-    path_final_file = output_dir_i + "/" + path.split("/")[-1].replace(".fits", "_TAC.dat")
-    final_table = np.genfromtxt(path_final_file)
-    waves_targ = final_table[:, 0]
-    flux_targ = final_table[:, 1]
-    flux_targ_tac = final_table[:, 4] if final_table.shape[1] > 5 else final_table[:, 3]
-
-    s_n_raw = get_signal_to_noise(waves_targ, flux_targ)
-    s_n_tac = get_signal_to_noise(waves_targ, flux_targ_tac)
-
-    quality_label = -1
-    red_chi2, wvlg_sol1, wavlg_sol2 = get_results(output_dir_i, "Spectrum_" + str(output_index))
-    FWHM_result = get_FWHM_result(output_dir_i, "Spectrum_" + str(output_index))
-
-    return [
-        path.split("/")[-1].replace(".fits", " "),
-        path.split("/")[-1].replace(".fits", "_TAC.dat"),
-        FWHM_result,
-        s_n_raw,
-        s_n_tac,
-        red_chi2,
-        quality_label,
-        wvlg_sol1,
-        wavlg_sol2,
-    ]
-
-
-def _run_calctrans_with_relcol_from_fitpar(entry, relcol_values):
-    """
-    Second pass for orderwise mode: re-run calctrans using combined molecular columns
-    while keeping each order's fitted nuisance terms from pass 1.
-    """
-    output_dir_i = entry["output_dir"]
-    i = entry["index"]
-    path = entry["path"]
-
-    fit_par = output_dir_i + "/Spectrum_" + str(i) + "_fit.par"
-    if not os.path.exists(fit_par):
-        raise FileNotFoundError("Missing first-pass fit par file: {}".format(fit_par))
-
-    temp_calctrans_path = path_to_program + "/temp_" + str(i) + "_calctrans_global.par"
-    shutil.copy(fit_par, temp_calctrans_path)
-
-    relcol_str = " ".join(["{:.6g}".format(float(v)) for v in relcol_values])
-    _set_parfile_value(temp_calctrans_path, "relcol", relcol_str)
-    _set_parfile_value(temp_calctrans_path, "wrange_include", "none")
-    _set_parfile_value(temp_calctrans_path, "wrange_exclude", "none")
-    _set_parfile_value(temp_calctrans_path, "prange_exclude", "none")
-
-    calctrans_cmd = path_to_molecfit + "calctrans " + temp_calctrans_path
-    if os.system(calctrans_cmd) != 0:
-        if os.path.exists(temp_calctrans_path):
-            remove(temp_calctrans_path)
-        raise RuntimeError("calctrans second pass failed for {}".format(path))
-
-    save_result(path, output_dir_i, output_index=i)
-    save_plot(path, entry["wlgtomicron"], output_dir_i, entry["include_ranges"], i)
-
-    if os.path.exists(temp_calctrans_path):
-        remove(temp_calctrans_path)
-
-    return _build_summary_row(path, output_dir_i, i)
-
-
-def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
+def invoke_molecfit(i):
     if hasattr(list_of_spectra, "iloc"):
         path = str(list_of_spectra["path"].iloc[i])
     else:
@@ -1248,8 +1025,6 @@ def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
     output_dir_i = _build_output_dir_for_spectrum(i, path)
 
     channel_config = _get_channel_config()
-    orderwise_mode_active = _is_carmenes_orderwise_mode_active()
-    obs_key = _get_obs_key(i, path)
     configured_family = str(configured_channel_type).strip().upper()
     instrument_header = str(_first_header_raw(path, ["INSTRUME"])).strip().upper()
     instrument_to_family = {
@@ -1332,12 +1107,7 @@ def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
     _set_parfile_value(temp_par_path, "vac_air", channel_config["vac_air"])
     _set_parfile_value(temp_par_path, "list_molec", channel_config["list_molec"])
     _set_parfile_value(temp_par_path, "fit_molec", channel_config["fit_molec"])
-    if relcol_override is not None:
-        relcol_override = [float(v) for v in relcol_override]
-        relcol_string = " ".join(["{:.6g}".format(v) for v in relcol_override])
-    else:
-        relcol_string = channel_config["relcol"]
-    _set_parfile_value(temp_par_path, "relcol", relcol_string)
+    _set_parfile_value(temp_par_path, "relcol", channel_config["relcol"])
     replace(temp_par_path, temp_par_path, "#wlgtomicron", str(wlgtomicron))
 
     exclude_file_path = path_to_program + "/exclude_" + str(i) + ".dat"
@@ -1387,10 +1157,8 @@ def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
 
     Exluding = []
     for lo, hi in exclude_windows_template:
-        clipped_lo = max(float(lo), float(lambda_min))
-        clipped_hi = min(float(hi), float(lambda_max))
-        if clipped_hi - clipped_lo > 1e-4:
-            Exluding.append([clipped_lo, clipped_hi])
+        if lo >= lambda_min and hi <= lambda_max:
+            Exluding.append([lo, hi])
 
     np.savetxt(exclude_file_path, Exluding)
 
@@ -1402,21 +1170,6 @@ def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
     )
 
     if not Including[1]:
-        if orderwise_mode_active:
-            if os.path.exists(temp_par_path):
-                remove(temp_par_path)
-            if os.path.exists(exclude_file_path):
-                remove(exclude_file_path)
-            if os.path.exists(include_file_path):
-                remove(include_file_path)
-            return {
-                "success": False,
-                "skipped": True,
-                "path": path,
-                "index": i,
-                "obs_key": obs_key,
-                "message": "No telluric fitting windows overlap order wavelength range",
-            }
         raise ValueError("Inclusion region too small for file: {}".format(path))
     np.savetxt(include_file_path, Including[0])
 
@@ -1437,9 +1190,26 @@ def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
     if os.system(molecfit_cmd) != 0:
         raise RuntimeError("molecfit failed for {}".format(path))
 
-    molecules = str(channel_config["list_molec"]).split()
-    res_path = output_dir_i + "/Spectrum_" + str(i) + "_fit.res"
-    parsed_mol_columns = _parse_relative_molecular_columns_from_res(res_path, molecules)
+    # Run calctrans on full spectral range: keep the fit constrained by
+    # wrange_include/wrange_exclude, but do not limit transmission output.
+    name_temp_par_calctrans = "/temp_" + str(i) + "_calctrans.par"
+    temp_calctrans_path = path_to_program + name_temp_par_calctrans
+    shutil.copy(temp_par_path, temp_calctrans_path)
+    replace(temp_calctrans_path, temp_calctrans_path,
+        "wrange_include: "+include_file_path, "wrange_include: none")
+    replace(temp_calctrans_path, temp_calctrans_path,
+        "wrange_exclude: "+exclude_file_path, "wrange_exclude: none")
+    replace(temp_calctrans_path, temp_calctrans_path,
+        "prange_exclude: none", "prange_exclude: none")
+    calctrans_cmd = path_to_molecfit + "calctrans " + temp_calctrans_path
+    if os.system(calctrans_cmd) != 0:
+        raise RuntimeError("calctrans failed for {}".format(path))
+
+    ###
+    ### Save the results in a seperate directory
+    ###
+    
+    save_result(path, output_dir_i, output_index=i)
 
     # Persist fit-range files in output folder for notebook diagnostics.
     if os.path.exists(include_file_path):
@@ -1447,92 +1217,56 @@ def invoke_molecfit(i, relcol_override=None, run_calctrans=True):
     if os.path.exists(exclude_file_path):
         shutil.copy(exclude_file_path, output_dir_i + "/exclude_" + str(i) + ".dat")
 
-    summary_row = None
-    temp_calctrans_path = None
-    if run_calctrans:
-        # Run calctrans on full spectral range: keep fit constrained by
-        # wrange_include/wrange_exclude, but do not limit transmission output.
-        name_temp_par_calctrans = "/temp_" + str(i) + "_calctrans.par"
-        temp_calctrans_path = path_to_program + name_temp_par_calctrans
-        shutil.copy(temp_par_path, temp_calctrans_path)
-        _set_parfile_value(temp_calctrans_path, "wrange_include", "none")
-        _set_parfile_value(temp_calctrans_path, "wrange_exclude", "none")
-        _set_parfile_value(temp_calctrans_path, "prange_exclude", "none")
-        calctrans_cmd = path_to_molecfit + "calctrans " + temp_calctrans_path
-        if os.system(calctrans_cmd) != 0:
-            raise RuntimeError("calctrans failed for {}".format(path))
+    path_final_file = output_dir_i + "/" + path.split("/")[-1].replace(".fits", "_TAC.dat")
+    final_table = np.genfromtxt(path_final_file)
+    waves_targ = final_table[:, 0]
+    flux_targ = final_table[:, 1]
+    flux_targ_tac = final_table[:, 4] if final_table.shape[1] > 5 else final_table[:, 3]
 
-        save_result(path, output_dir_i, output_index=i)
-        summary_row = _build_summary_row(path, output_dir_i, i)
+    s_n_raw = get_signal_to_noise(waves_targ, flux_targ)
+    s_n_tac = get_signal_to_noise(waves_targ, flux_targ_tac)
+    
+    # Legacy master-transmission quality scoring removed.
+    # -1 means "not evaluated".
+    quality_label = -1
+        
+    
+    ##get other parameters
+    red_chi2, wvlg_sol1, wavlg_sol2 = get_results(output_dir_i,"Spectrum_"+str(i))
+    FWHM_result = get_FWHM_result(output_dir_i, "Spectrum_" + str(i))
+    
+    returner = [
+        path.split("/")[-1].replace(".fits", " "),
+        path.split("/")[-1].replace(".fits", "_TAC.dat"),
+        FWHM_result,
+        s_n_raw,
+        s_n_tac,
+        red_chi2,
+        quality_label,
+        wvlg_sol1,
+        wavlg_sol2,
+    ]
 
     remove(temp_par_path)
-    if temp_calctrans_path is not None and os.path.exists(temp_calctrans_path):
+    if os.path.exists(temp_calctrans_path):
         remove(temp_calctrans_path)
     remove(exclude_file_path)
     remove(include_file_path)
 
-    return {
-        "success": True,
-        "skipped": False,
-        "path": path,
-        "index": i,
-        "obs_key": obs_key,
-        "output_dir": output_dir_i,
-        "wlgtomicron": wlgtomicron,
-        "include_ranges": Including[0],
-        "summary_row": summary_row,
-        "mol_columns": parsed_mol_columns,
-        "molecules": molecules,
-    }
+    return True, returner, [path, wlgtomicron, output_dir_i, Including[0], i]
 
 
 if __name__ == '__main__':
-    total_spectra = len(list_of_spectra["path"])
-    orderwise_mode_active = _is_carmenes_orderwise_mode_active()
-
-    if orderwise_mode_active:
-        print("[INFO]\t CARMENES two-pass orderwise mode is ACTIVE.")
-        first_pass_entries = []
-
-        for iterator in range(total_spectra):
-            try:
-                result = invoke_molecfit(iterator, run_calctrans=False)
-                if result["success"]:
-                    first_pass_entries.append(result)
-                elif result.get("skipped", False):
-                    print("[INFO]\t Skipping {} ({})".format(result.get("path", "unknown"), result.get("message", "")))
-                else:
-                    list_of_spectra_errors.append([result.get("path", "unknown"), result.get("message", "Unknown failure")])
-            except Exception as exc:
-                path_i = str(list_of_spectra["path"].iloc[iterator]) if hasattr(list_of_spectra, "iloc") else str(list_of_spectra["path"][iterator])
-                list_of_spectra_errors.append([path_i, str(exc)])
-
-        if len(first_pass_entries) == 0:
-            raise RuntimeError("No valid orderwise first-pass fits were produced.")
-
-        molecules = first_pass_entries[0]["molecules"]
-        combined_columns = _combine_relative_columns_by_observation(first_pass_entries, molecules)
-
-        for entry in first_pass_entries:
-            try:
-                obs_key = entry["obs_key"]
-                if obs_key not in combined_columns:
-                    raise KeyError("Missing combined columns for obs_key '{}'".format(obs_key))
-                summary_row = _run_calctrans_with_relcol_from_fitpar(entry, combined_columns[obs_key])
-                list_of_fitting_results.append(summary_row)
-            except Exception as exc:
-                list_of_spectra_errors.append([entry.get("path", "unknown"), str(exc)])
-    else:
-        # Legacy behavior for non-orderwise inputs.
-        results = Parallel(n_jobs=1)(delayed(invoke_molecfit)(iterator, run_calctrans=True) for iterator in range(total_spectra))
-        for result in results:
-            if result["success"]:
-                save_plot(result["path"], result["wlgtomicron"], result["output_dir"], result["include_ranges"], result["index"])
-                if result["summary_row"] is not None:
-                    list_of_fitting_results.append(result["summary_row"])
-            elif not result.get("success", False):
-                list_of_spectra_errors.append([result.get("path", "unknown"), result.get("message", "Unknown failure")])
-
+    num_cores = multiprocessing.cpu_count()
+    
+    #results = Parallel(n_jobs=1)(delayed(invoke_molecfit)(iterator) for iterator in range(12,len(list_of_spectra["path"])))
+    results = Parallel(n_jobs=1)(delayed(invoke_molecfit)(iterator) for iterator in range(len(list_of_spectra["path"])))
+    for j in range(len(results)):
+        if results[j][0]:
+            save_plot(*results[j][2])
+            list_of_fitting_results.append(results[j][1])
+        elif not results[j][0]:
+            list_of_spectra_errors.append(results[j][1])
     if len(list_of_spectra_errors) != 0:
         print("For some files, an error occured")
         np.savetxt(path_to_program+"/error_spectra.dat",list_of_spectra_errors,fmt="%s")
