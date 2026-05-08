@@ -46,7 +46,10 @@ path_to_gen_par = "/home/amasson/data/molecfit_wrapper/Parameter_Files/generic_p
 name_gen_par = "/"+path_to_gen_par.split("/")[-1]
 
 #2) <path to list of spectra file>
-path_to_list = "/home/amasson/data/molecfit_wrapper/Automated_Program/TOI-969b_HARPS_03-03-2024.csv"
+path_to_list = "/home/amasson/data/molecfit_wrapper/Automated_Program/TOI-969b_NIRPS_03-03-2024.csv"
+# Explicit wrapper setup for one homogeneous input CSV.
+# Supported values: HARPS, NIRPS, ESPRESSO, CARMENES_VIS, CARMENES_NIR
+configured_channel_type = "NIRPS"
 
 #3) <path to where the software tools >
 path_to_molecfit = "/home/amasson/data/molecfit/bin/"
@@ -60,9 +63,6 @@ path_to_tellurics_dir = "/home/amasson/data/molecfit_wrapper/Parameter_Files"
 #<path to file with the telluric region selected for plotting>
 path_to_telluric_plotting_reg = "/home/amasson/data/molecfit_wrapper/Parameter_Files/tellurics_plot_reg.dat"
 
-# Explicit wrapper setup for one homogeneous input CSV.
-# Supported values: HARPS, NIRPS, ESPRESSO, CARMENES_VIS, CARMENES_NIR
-configured_channel_type = "HARPS"
 
 CHANNEL_CONFIGS = {
     "HARPS": {
@@ -77,11 +77,24 @@ CHANNEL_CONFIGS = {
         "relcol": "1.0 1.0",
         "include_file": path_to_tellurics_dir + "/tellurics_include_harps.dat",
         "exclude_file": path_to_tellurics_dir + "/tellurics_exclude_harps.dat",
+        "header_keys": {
+            "obsdate": "MJD-OBS",
+            "utc": "UTC",
+            "telalt": "HIERARCH ESO TEL ALT",
+            "geoelev": "HIERARCH ESO TEL GEOELEV",
+            "longitude": "HIERARCH ESO TEL GEOLON",
+            "latitude": "HIERARCH ESO TEL GEOLAT",
+            "temp": "HIERARCH ESO TEL AMBI TEMP",
+            "pres_start": "HIERARCH ESO TEL AMBI PRES START",
+            "pres_end": "HIERARCH ESO TEL AMBI PRES END",
+            "rhum": "HIERARCH ESO TEL AMBI RHUM",
+            "m1temp": "HIERARCH ESO TEL TH M1 TEMP",
+        },
     },
     "NIRPS": {
         "fits_level": 1,
-        "vac_air": "air",
-        "wave_source": "WAVE_AIR",
+        "vac_air": "vac",
+        "wave_source": "WAVE_TABLE_ROW0",
         "error_mode": "from_column",
         "resolving_power": 80000.0,
         "berv_mode": "csv_bary_to_topo",
@@ -90,6 +103,19 @@ CHANNEL_CONFIGS = {
         "relcol": "1.0 1.0 1.0",
         "include_file": path_to_tellurics_dir + "/tellurics_include_nirps.dat",
         "exclude_file": path_to_tellurics_dir + "/tellurics_exclude_nirps.dat",
+        "header_keys": {
+            "obsdate": "MJD-OBS",
+            "utc": "UTC",
+            "telalt": "HIERARCH ESO TEL ALT",
+            "geoelev": "HIERARCH ESO TEL GEOELEV",
+            "longitude": "HIERARCH ESO TEL GEOLON",
+            "latitude": "HIERARCH ESO TEL GEOLAT",
+            "temp": "HIERARCH ESO TEL AMBI TEMP",
+            "pres_start": "HIERARCH ESO TEL AMBI PRES START",
+            "pres_end": "HIERARCH ESO TEL AMBI PRES END",
+            "rhum": "HIERARCH ESO TEL AMBI RHUM",
+            "m1temp": "HIERARCH ESO TEL AMBI TEMP",
+        },
     },
     "ESPRESSO": {
         "fits_level": 1,
@@ -103,6 +129,19 @@ CHANNEL_CONFIGS = {
         "relcol": "1.0 1.0",
         "include_file": path_to_tellurics_dir + "/tellurics_include_harps.dat",
         "exclude_file": path_to_tellurics_dir + "/tellurics_exclude_harps.dat",
+        "header_keys": {
+            "obsdate": "MJD-OBS",
+            "utc": "UTC",
+            "telalt": "HIERARCH ESO TEL ALT",
+            "geoelev": "HIERARCH ESO TEL GEOELEV",
+            "longitude": "HIERARCH ESO TEL GEOLON",
+            "latitude": "HIERARCH ESO TEL GEOLAT",
+            "temp": "HIERARCH ESO TEL AMBI TEMP",
+            "pres_start": "HIERARCH ESO TEL AMBI PRES START",
+            "pres_end": "HIERARCH ESO TEL AMBI PRES END",
+            "rhum": "HIERARCH ESO TEL AMBI RHUM",
+            "m1temp": "HIERARCH ESO TEL TH M1 TEMP",
+        },
     },
     "CARMENES_VIS": {
         "fits_level": 1,
@@ -116,6 +155,19 @@ CHANNEL_CONFIGS = {
         "relcol": "1.0 1.0",
         "include_file": path_to_tellurics_dir + "/tellurics_include_carmenes_vis.dat",
         "exclude_file": path_to_tellurics_dir + "/tellurics_exclude_carmenes_vis.dat",
+        "header_keys": {
+            "obsdate": "MJD-OBS",
+            "utc": "HIERARCH CAHA INS VIS CCD UT",
+            "telalt": "HIERARCH CAHA TEL POS EL_START",
+            "geoelev": "HIERARCH CAHA TEL GEOELEV",
+            "longitude": "HIERARCH CAHA TEL GEOLON",
+            "latitude": "HIERARCH CAHA TEL GEOLAT",
+            "temp": "HIERARCH CAHA GEN AMBI TEMPERATURE",
+            "pres_start": "HIERARCH CAHA GEN AMBI PRESSURE",
+            "pres_end": "HIERARCH CAHA GEN AMBI PRESSURE",
+            "rhum": "HIERARCH CAHA GEN AMBI RHUM",
+            "m1temp": "HIERARCH CAHA GEN AMBI TEMPERATURE",
+        },
     },
     "CARMENES_NIR": {
         "fits_level": 1,
@@ -129,6 +181,19 @@ CHANNEL_CONFIGS = {
         "relcol": "1.0 1.0 1.0",
         "include_file": path_to_tellurics_dir + "/tellurics_include_carmenes_nir.dat",
         "exclude_file": path_to_tellurics_dir + "/tellurics_exclude_carmenes_nir.dat",
+        "header_keys": {
+            "obsdate": "MJD-OBS",
+            "utc": "UT",
+            "telalt": "HIERARCH CAHA TEL POS EL_START",
+            "geoelev": "HIERARCH CAHA TEL GEOELEV",
+            "longitude": "HIERARCH CAHA TEL GEOLON",
+            "latitude": "HIERARCH CAHA TEL GEOLAT",
+            "temp": "HIERARCH CAHA GEN AMBI TEMPERATURE",
+            "pres_start": "HIERARCH CAHA GEN AMBI PRESSURE",
+            "pres_end": "HIERARCH CAHA GEN AMBI PRESSURE",
+            "rhum": "HIERARCH CAHA GEN AMBI RHUM",
+            "m1temp": "HIERARCH CAHA GEN AMBI TEMPERATURE",
+        },
     },
 }
 
@@ -138,13 +203,6 @@ fit_resolution_in_molecfit = True
 
 # Enable only when you explicitly want a wavelength-variable kernel.
 allow_variable_kernel = True
-
-# Optional flux pre-normalization before running molecfit.
-# This helps when S1D continuum shape is not compatible with low-order
-# continuum fitting in the parfile.
-normalize_s1d_before_molecfit = True
-normalization_window_pixels = 401
-normalization_percentile = 85.0
 
 
 #<path to final results>
@@ -192,6 +250,32 @@ def _get_csv_berv_m_per_s(i, path_to_file):
         )
 
     return float(berv_value)
+
+
+def _get_header_berv_m_per_s(path_to_file):
+    """
+    Read BERV from header and return m/s.
+    ESO QC BERV is typically stored in km/s.
+    """
+    header = fits.getheader(path_to_file, 0)
+
+    # (keyword, multiplicative factor to m/s)
+    key_candidates = [
+        ("HIERARCH ESO QC BERV", 1000.0),
+        ("ESO QC BERV", 1000.0),
+        ("BERV", 1000.0),
+    ]
+
+    for key, scale_to_m_per_s in key_candidates:
+        if key in header and header[key] is not None:
+            return float(header[key]) * float(scale_to_m_per_s)
+
+    raise KeyError(
+        "Missing BERV keyword in header for file: {}. Tried: {}".format(
+            path_to_file,
+            ", ".join([k for k, _ in key_candidates]),
+        )
+    )
 
 
 def replace(file_path, file_path_new,pattern, subst):
@@ -263,6 +347,19 @@ def _get_channel_config():
             )
         )
     return CHANNEL_CONFIGS[channel_type]
+
+
+def _get_channel_header_value(path_to_file, channel_config, field_name):
+    header_keys = channel_config.get("header_keys")
+    if not isinstance(header_keys, dict):
+        raise ValueError("Missing 'header_keys' mapping in channel configuration")
+    if field_name not in header_keys:
+        raise ValueError(
+            "Missing header key mapping for '{}' in configured channel".format(field_name)
+        )
+
+    key = header_keys[field_name]
+    return _first_header_value(path_to_file, [key])
 
 
 def _build_output_dir_for_spectrum(index, path_to_file):
@@ -419,6 +516,38 @@ def get_data(path_to_file, expression, fits_level = 1):
                 path_to_file,
             )
         )
+
+    if expr_upper in ("WAVE_TABLE_ROW0", "WAVE_ROW0"):
+        ext_data = hdul[fits_level].data
+        ext_names = getattr(ext_data, "names", None)
+        if ext_names is None:
+            hdul.close()
+            raise ValueError(
+                "Requested {} but FITS extension {} is not a table in {}".format(
+                    expr_upper,
+                    fits_level,
+                    path_to_file,
+                )
+            )
+
+        by_upper = {str(col).upper(): col for col in ext_names}
+        if "WAVE" not in by_upper:
+            hdul.close()
+            raise ValueError(
+                "Requested {} but column 'WAVE' is missing in extension {} of {}".format(
+                    expr_upper,
+                    fits_level,
+                    path_to_file,
+                )
+            )
+
+        wave_column = np.asarray(ext_data[by_upper["WAVE"]])
+        hdul.close()
+        if wave_column.ndim == 0:
+            raise ValueError("Invalid scalar WAVE column in {}".format(path_to_file))
+        if wave_column.shape[0] < 1:
+            raise ValueError("Empty WAVE column in {}".format(path_to_file))
+        return np.asarray(wave_column[0], dtype=float)
 
     ext_data = hdul[fits_level].data
     ext_names = getattr(ext_data, "names", None)
@@ -751,35 +880,20 @@ def get_signal_to_noise(waves_target, flux_target,bin_size=20):
     return np.mean(f_interp(waves_target))/np.mean(f_std(waves_target))
 
 
-def get_weather_data(path_to_file):
+def get_weather_data(path_to_file, channel_config):
     """
-    Read weather metadata from generic ESO-like header keys.
+    Read weather metadata from strict channel-specific header keys.
     :return temp, pres, hum:
     Raises ValueError if any required keyword is missing, so that unsupported
     file formats are caught explicitly rather than silently using wrong values.
     """
-    temp = _first_header_value(path_to_file, [
-        "HIERARCH ESO TEL AMBI TEMP", "ESO TEL AMBI TEMP", "TEL AMBI TEMP",
-        "HIERARCH CAHA GEN AMBI TEMPERATURE"
-    ])
-
-    pres_start = _first_header_value(path_to_file, [
-        "HIERARCH ESO TEL AMBI PRES START", "ESO TEL AMBI PRES START", "TEL AMBI PRES START"
-    ])
-    pres_end = _first_header_value(path_to_file, [
-        "HIERARCH ESO TEL AMBI PRES END", "ESO TEL AMBI PRES END", "TEL AMBI PRES END"
-    ])
+    temp = _get_channel_header_value(path_to_file, channel_config, "temp")
+    pres_start = _get_channel_header_value(path_to_file, channel_config, "pres_start")
+    pres_end = _get_channel_header_value(path_to_file, channel_config, "pres_end")
     pres = 0.5 * (pres_start + pres_end)
 
-    rhum = _first_header_value(path_to_file, [
-        "HIERARCH ESO TEL AMBI RHUM", "ESO TEL AMBI RHUM", "TEL AMBI RHUM",
-        "HIERARCH CAHA GEN AMBI RHUM"
-    ])
-
-    m1 = _first_header_value(path_to_file, [
-        "HIERARCH ESO TEL TH M1 TEMP", "ESO TEL TH M1 TEMP", "TEL TH M1 TEMP"
-    ])
-    mirror_temp = m1
+    rhum = _get_channel_header_value(path_to_file, channel_config, "rhum")
+    mirror_temp = _get_channel_header_value(path_to_file, channel_config, "m1temp")
 
     return float(temp), float(mirror_temp), float(pres), float(rhum)
     
@@ -911,6 +1025,27 @@ def invoke_molecfit(i):
     output_dir_i = _build_output_dir_for_spectrum(i, path)
 
     channel_config = _get_channel_config()
+    configured_family = str(configured_channel_type).strip().upper()
+    instrument_header = str(_first_header_raw(path, ["INSTRUME"])).strip().upper()
+    instrument_to_family = {
+        "HARPS": "HARPS",
+        "NIRPS": "NIRPS",
+        "ESPRESSO": "ESPRESSO",
+        "CARMENES": "CARMENES_VIS",  # CARMENES family requires explicit VIS/NIR selection in config.
+    }
+    expected_family = instrument_to_family.get(instrument_header)
+    if expected_family is not None and configured_family != expected_family and not (
+        instrument_header == "CARMENES" and configured_family in ("CARMENES_VIS", "CARMENES_NIR")
+    ):
+        raise ValueError(
+            "Configured channel '{}' does not match INSTRUME='{}' for file '{}'. "
+            "Set configured_channel_type accordingly.".format(
+                configured_family,
+                instrument_header,
+                path,
+            )
+        )
+
     wave_expression = channel_config["wave_source"]
     fits_level = int(channel_config["fits_level"])
     error_mode = str(channel_config["error_mode"]).strip().lower()
@@ -924,10 +1059,19 @@ def invoke_molecfit(i):
     else:
         raise ValueError("Unsupported error_mode '{}' for configured channel.".format(error_mode))
 
-    if channel_config["berv_mode"] == "csv_bary_to_topo":
+    berv_mode = str(channel_config.get("berv_mode", "none")).strip().lower()
+    if berv_mode == "csv_bary_to_topo":
         print("[INFO]\t Applying CSV BERV correction (barycentric -> topocentric).")
         berv_m_per_s = _get_csv_berv_m_per_s(i, path)
         wavelengths_array = wavelengths_array / (1.0 + berv_m_per_s / SPEED_OF_LIGHT_M_S)
+    elif berv_mode == "header_bary_to_topo":
+        print("[INFO]\t Applying header BERV correction (barycentric -> topocentric).")
+        berv_m_per_s = _get_header_berv_m_per_s(path)
+        wavelengths_array = wavelengths_array / (1.0 + berv_m_per_s / SPEED_OF_LIGHT_M_S)
+    elif berv_mode == "none":
+        pass
+    else:
+        raise ValueError("Unsupported berv_mode '{}' for configured channel.".format(berv_mode))
 
     wave_clean, flux_clean, err_clean, qual_mask, qc_stats = _sanitize_spectrum_for_molecfit(
         wavelengths_array,
@@ -946,27 +1090,6 @@ def invoke_molecfit(i):
 
     flux_for_fit = flux_clean
     err_for_fit = err_clean
-    # if normalize_s1d_before_molecfit:
-    #     # flux_for_fit, err_for_fit, _ = _normalize_spectrum_for_molecfit(
-    #     #     wave_clean,
-    #     #     flux_clean,
-    #     #     err_clean,
-    #     #     qual_mask,
-    #     #     window_pixels=normalization_window_pixels,
-    #     #     percentile=normalization_percentile,
-    #     # )
-        
-    #     # also ensure all values are strictly positive
-    #     # flux_for_fit += np.nanmax(np.abs(flux_for_fit)) + 1.0
-    #     # flux_for_fit /= np.nanmedian(flux_for_fit)
-
-    #     print(
-    #         "[INFO]\t Pre-normalized {} for molecfit (window={}, percentile={}%).".format(
-    #             os.path.basename(path),
-    #             int(normalization_window_pixels),
-    #             float(normalization_percentile),
-    #         )
-    #     )
 
     save_array_as_ASCII_with_qual(path, wave_clean, flux_for_fit, err_for_fit, qual_mask)
     wlgtomicron = get_wlgtomicron(path, True)
@@ -995,32 +1118,32 @@ def invoke_molecfit(i):
     replace(temp_par_path, temp_par_path, "#output_dir", output_dir_i)
     replace(temp_par_path, temp_par_path, "#output_name", "Spectrum_" + str(i))
 
-    # Inject weather/site parameters from generic ESO-like headers.
-    mjd_obs = _first_header_value(path, ["MJD-OBS", "HIERARCH CARACAL MJD-OBS"])
+    # Inject weather/site parameters from strict channel-specific headers.
+    mjd_obs = _get_channel_header_value(path, channel_config, "obsdate")
     replace(temp_par_path, temp_par_path, "obsdate#:", "obsdate: " + str(mjd_obs))
     replace(temp_par_path, temp_par_path, "obsdate_key: MJD-OBS", "obsdate_key: NONE")
 
-    utc_sec = _first_header_value(path, ["UTC"])
+    utc_sec = _get_channel_header_value(path, channel_config, "utc")
     replace(temp_par_path, temp_par_path, "utc#:", "utc: " + str(utc_sec))
     replace(temp_par_path, temp_par_path, "utc_key: UTC", "utc_key: NONE")
 
-    telalt = _first_header_value(path, ["HIERARCH ESO TEL ALT", "HIERARCH CAHA TEL POS EL_START"])
+    telalt = _get_channel_header_value(path, channel_config, "telalt")
     replace(temp_par_path, temp_par_path, "telalt#:", "telalt: " + str(telalt))
     replace(temp_par_path, temp_par_path, "telalt_key: ESO TEL ALT", "telalt_key: NONE")
 
-    geoelev = _first_header_value(path, ["HIERARCH ESO TEL GEOELEV", "HIERARCH CAHA TEL GEOELEV"])
+    geoelev = _get_channel_header_value(path, channel_config, "geoelev")
     replace(temp_par_path, temp_par_path, "geoelev#:", "geoelev: " + str(geoelev))
     replace(temp_par_path, temp_par_path, "geoelev_key: ESO TEL GEOELEV", "geoelev_key: NONE")
 
-    longitude = _first_header_value(path, ["HIERARCH ESO TEL GEOLON", "HIERARCH CAHA TEL GEOLON"])
+    longitude = _get_channel_header_value(path, channel_config, "longitude")
     replace(temp_par_path, temp_par_path, "longitude#:", "longitude: " + str(longitude))
     replace(temp_par_path, temp_par_path, "longitude_key: ESO TEL GEOLON", "longitude_key: NONE")
 
-    latitude = _first_header_value(path, ["HIERARCH ESO TEL GEOLAT", "HIERARCH CAHA TEL GEOLAT"])
+    latitude = _get_channel_header_value(path, channel_config, "latitude")
     replace(temp_par_path, temp_par_path, "latitude#:", "latitude: " + str(latitude))
     replace(temp_par_path, temp_par_path, "latitude_key: ESO TEL GEOLAT", "latitude_key: NONE")
 
-    temp, mir_temp, pressure, humid = get_weather_data(path)
+    temp, mir_temp, pressure, humid = get_weather_data(path, channel_config)
     replace(temp_par_path, temp_par_path, "temp#:", "temp: " + str(temp))
     replace(temp_par_path, temp_par_path, "temp_key: ESO TEL AMBI TEMP", "temp_key: NONE")
     replace(temp_par_path, temp_par_path, "pres#:", "pres: " + str(pressure))
