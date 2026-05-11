@@ -1,0 +1,175 @@
+//****************************************//
+// CLASSIFICATION : STD_MODEL/SCIENCE data //
+//****************************************//
+
+// For HARPS the HARPS/ESPDR PL sets PRODCATG="SCIENCE.SPECTRUM" in the PRO.CATG="S1D_FINAL_A" product
+if INSTRUME == "HARPS" and (
+    PRODCATG == "SCIENCE.SPECTRUM" or
+    //PRO.CATG == "S1D_A" or
+    //PRO.CATG == "S1D_FINAL_A" or
+    //PRO.CATG == "S1D_FLUXCAL_A" or
+    //PRO.CATG == "S1D_SKYSUB_A" or
+    //PRO.CATG == "S1D_SKYSUB_FLUXCAL_A" or
+    PRO.CATG == "DUMMY"
+  ) then  
+{
+ DO.CATG    = "MOLECFIT";
+ RAW.TYPE   = "SCIENCE";
+ REFLEX.CATG  = "SCIENCE";
+ REFLEX.TARGET = "T";
+}
+
+if INSTRUME == "HARPS" and (
+    PRO.CATG == "S1D_STD_A" or 
+    PRO.CATG == "TELL_S1D_A" or 
+    PRO.CATG == "DUMMY"
+  ) then
+{
+ DO.CATG    = "MOLECFIT";
+ RAW.TYPE   = "STD_MODEL";
+ REFLEX.CATG  = "STD_MODEL";
+ REFLEX.TARGET = "T";
+}
+
+
+//************************************//
+// CLASSIFICATION : static_calib data //
+//************************************//
+
+if (PRO.CATG == "KERNEL_LIBRARY"          ) then { REFLEX.CATG = "KERNEL_LIBRARY";           }
+if (PRO.CATG == "MAPPING_KERNEL"          ) then { REFLEX.CATG = "MAPPING_KERNEL";           }
+
+if (PRO.CATG == "MOLECULES"               ) then { REFLEX.CATG = "MOLECULES";                }
+if (PRO.CATG == "AUTO_MOLECULES"          ) then { REFLEX.CATG = "AUTO_MOLECULES";           }
+if (PRO.CATG == "MOLECULE_ATLAS"          ) then { REFLEX.CATG = "MOLECULE_ATLAS";           }
+if (PRO.CATG == "WAVE_INCLUDE"            ) then { REFLEX.CATG = "WAVE_INCLUDE";             }
+if (PRO.CATG == "WAVE_EXCLUDE"            ) then { REFLEX.CATG = "WAVE_EXCLUDE";             }
+if (PRO.CATG == "PIXEL_EXCLUDE"           ) then { REFLEX.CATG = "PIXEL_EXCLUDE";            }
+if (PRO.CATG == "GDAS"                    ) then { REFLEX.CATG = "GDAS";                     }
+if (PRO.CATG == "ATM_PROFILE_STANDARD"    ) then { REFLEX.CATG = "ATM_PROFILE_STANDARD";     }
+if (PRO.CATG == "MODEL_KERNEL_LIBRARY"    ) then { REFLEX.CATG = "MODEL_KERNEL_LIBRARY";     }
+if (PRO.CATG == "MODEL_MAPPING_KERNEL"    ) then { REFLEX.CATG = "MODEL_MAPPING_KERNEL";     }
+
+if (PRO.CATG == "MODEL_MOLECULES"         ) then { REFLEX.CATG = "MODEL_MOLECULES";          }
+if (PRO.CATG == "ATM_PARAMETERS"          ) then { REFLEX.CATG = "ATM_PARAMETERS";           }
+if (PRO.CATG == "BEST_FIT_PARAMETERS"     ) then { REFLEX.CATG = "BEST_FIT_PARAMETERS";      }
+if (PRO.CATG == "MAPPING_ATMOSPHERIC"     ) then { REFLEX.CATG = "MAPPING_ATMOSPHERIC";      }
+if (PRO.CATG == "MAPPING_CONVOLVE"        ) then { REFLEX.CATG = "MAPPING_CONVOLVE";         }
+if (PRO.CATG == "CALCTRANS_KERNEL_LIBRARY") then { REFLEX.CATG = "CALCTRANS_KERNEL_LIBRARY"; }
+if (PRO.CATG == "CALCTRANS_MAPPING_KERNEL") then { REFLEX.CATG = "CALCTRANS_MAPPING_KERNEL"; }
+
+if (PRO.CATG == "TELLURIC_CORR"           ) then { REFLEX.CATG = "TELLURIC_CORR";            }
+if (PRO.CATG == "MAPPING_CORRECT"         ) then { REFLEX.CATG = "MAPPING_CORRECT";          }
+
+
+//**************************************************//
+// ORGANIZATION : Selection of actions and grouping //
+//**************************************************//
+  
+// Splitted CORRECTION files
+//select execute(ACTION_MOLECFIT)  from inputFiles where (RAW.TYPE == "SCIENCE") group by ARCFILE;
+    //INSTRUME, TPL.START;
+select execute(ACTION_MOLECFIT)    from inputFiles where (RAW.TYPE == "SCIENCE") group by CHECKSUM;
+
+
+
+//******************************//
+// ACTIONS : Recipe definitions //
+//******************************//
+
+action ACTION_MOLECFIT
+{
+
+ // minRet = 0; maxRet = 1;
+ // select file as STD_MODEL              from inputFiles where (RAW.TYPE == "STD_MODEL");
+
+ // minRet = 0; maxRet = 1;
+  //select file as SCIENCE_CALCTRANS      from inputFiles where (RAW.TYPE == "SCIENCE_CALCTRANS");
+
+  //minRet = 0; maxRet = 1000;
+  //select file as SCIENCE                from inputFiles where (RAW.TYPE == "SCIENCE");
+
+
+  minRet = 0; maxRet = 1;
+  select file as KERNEL_LIBRARY           from calibFiles where (PRO.CATG == "KERNEL_LIBRARY" and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as MAPPING_KERNEL           from calibFiles where (PRO.CATG == "MAPPING_KERNEL"  and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as MODEL_KERNEL_LIBRARY     from calibFiles where (PRO.CATG == "MODEL_KERNEL_LIBRARY"   and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as MODEL_MAPPING_KERNEL     from calibFiles where (PRO.CATG == "MODEL_MAPPING_KERNEL"  and inputFile.INSTRUME==INSTRUME);
+  
+  minRet = 0; maxRet = 1;
+  select file as CALCTRANS_KERNEL_LIBRARY from calibFiles where (PRO.CATG == "CALCTRANS_KERNEL_LIBRARY" and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as CALCTRANS_MAPPING_KERNEL from calibFiles where (PRO.CATG == "CALCTRANS_MAPPING_KERNEL" and inputFile.INSTRUME==INSTRUME);
+
+
+  minRet = 0; maxRet = 1;
+  select file as MOLECULES                from inputFiles where (PRO.CATG == "MOLECULES" and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as AUTO_MOLECULES from calibFiles where (PRO.CATG == "AUTO_MOLECULES")
+  and INSTRUME=="ANY"
+  ;
+
+  minRet = 0; maxRet = 1;
+  select file as MOLECULE_ATLAS from calibFiles where (PRO.CATG == "MOLECULE_ATLAS")
+  and INSTRUME == "ANY"
+  ;
+
+  minRet = 0; maxRet = 1;
+  select file as WAVE_INCLUDE             from inputFiles where (PRO.CATG == "WAVE_INCLUDE"  and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as WAVE_EXCLUDE             from inputFiles where (PRO.CATG == "WAVE_EXCLUDE"  and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as PIXEL_EXCLUDE            from inputFiles where (PRO.CATG == "PIXEL_EXCLUDE"  and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as GDAS                     from calibFiles where (PRO.CATG == "GDAS"   and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as ATM_PROFILE_STANDARD     from calibFiles where (PRO.CATG == "ATM_PROFILE_STANDARD"  and inputFile.INSTRUME==INSTRUME);
+
+
+  minRet = 0; maxRet = 1;
+  select file as MAPPING_ATMOSPHERIC      from calibFiles where (PRO.CATG == "MAPPING_ATMOSPHERIC"  and inputFile.INSTRUME==INSTRUME);
+
+  minRet = 0; maxRet = 1;
+  select file as MAPPING_CONVOLVE         from calibFiles where (PRO.CATG == "MAPPING_CONVOLVE"    and inputFile.INSTRUME==INSTRUME);
+  
+  minRet = 0; maxRet = 1;
+  select file as MAPPING_CORRECT          from calibFiles where (PRO.CATG == "MAPPING_CORRECT"     and inputFile.INSTRUME==INSTRUME);
+
+  
+  recipe molecfit_model;
+//  product GDAS {                     REFLEX.CATG = "GDAS";                      PRO.CATG = "GDAS";                      PRO.EXT="GDAS.FITS";                     }
+//  product GDAS_BEFORE {              REFLEX.CATG = "GDAS_BEFORE";               PRO.CATG = "GDAS_BEFORE";               PRO.EXT="GDAS_BEFORE.FITS";              }
+//  product GDAS_AFTER {               REFLEX.CATG = "GDAS_AFTER";                PRO.CATG = "GDAS_AFTER";                PRO.EXT="GDAS_AFTER.FITS";               }
+//  product MODEL_MOLECULES {          REFLEX.CATG = "MODEL_MOLECULES";           PRO.CATG = "MODEL_MOLECULES";           PRO.EXT="MODEL_MOLECULES.FITS";          }
+//  product WAVE_INCLUDE {             REFLEX.CATG = "WAVE_INCLUDE";              PRO.CATG = "WAVE_INCLUDE";              PRO.EXT="WAVE_INCLUDE.FITS";             }
+//  product WAVE_EXCLUDE {             REFLEX.CATG = "WAVE_EXCLUDE";              PRO.CATG = "WAVE_EXCLUDE";              PRO.EXT="WAVE_EXCLUDE.FITS";             }
+//  product PIXEL_EXCLUDE {            REFLEX.CATG = "PIXEL_EXCLUDE";             PRO.CATG = "PIXEL_EXCLUDE";             PRO.EXT="PIXEL_EXCLUDE.FITS";            }
+//  product ATM_PROFILE_STANDARD {     REFLEX.CATG = "ATM_PROFILE_STANDARD";      PRO.CATG = "ATM_PROFILE_STANDARD";      PRO.EXT="ATM_PROFILE_STANDARD.FITS";     }
+//  product ATM_PROFILE_COMBINED {     REFLEX.CATG = "ATM_PROFILE_COMBINED";      PRO.CATG = "ATM_PROFILE_COMBINED";      PRO.EXT="ATM_PROFILE_COMBINED.FITS";     }
+//  product ATM_PARAMETERS {           REFLEX.CATG = "ATM_PARAMETERS";            PRO.CATG = "ATM_PARAMETERS";            PRO.EXT="ATM_PARAMETERS.FITS";           }
+//  product BEST_FIT_PARAMETERS {      REFLEX.CATG = "BEST_FIT_PARAMETERS";       PRO.CATG = "BEST_FIT_PARAMETERS";       PRO.EXT="BEST_FIT_PARAMETERS.FITS";      }
+//  product BEST_FIT_MODEL {           REFLEX.CATG = "BEST_FIT_MODEL";            PRO.CATG = "BEST_FIT_MODEL";            PRO.EXT="BEST_FIT_MODEL.FITS";           }
+//  product MODEL_KERNEL_LIBRARY {     REFLEX.CATG = "MODEL_KERNEL_LIBRARY";      PRO.CATG = "MODEL_KERNEL_LIBRARY";      PRO.EXT="MODEL_KERNEL_LIBRARY.FITS";     }
+
+  recipe molecfit_calctrans;
+//  product LBLRTM_RESULTS {           REFLEX.CATG = "LBLRTM_RESULTS";            PRO.CATG = "LBLRTM_RESULTS";            PRO.EXT="LBLRTM_RESULTS.FITS";           }
+//  product TELLURIC_DATA {            REFLEX.CATG = "TELLURIC_DATA";             PRO.CATG = "TELLURIC_DATA";             PRO.EXT="TELLURIC_DATA.FITS";            }
+//  product TELLURIC_CORR {            REFLEX.CATG = "TELLURIC_CORR";             PRO.CATG = "TELLURIC_CORR";             PRO.EXT="TELLURIC_CORR.FITS";            }
+//  product CALCTRANS_KERNEL_LIBRARY { REFLEX.CATG = "CALCTRANS_KERNEL_LIBRARY";  PRO.CATG = "CALCTRANS_KERNEL_LIBRARY";  PRO.EXT="CALCTRANS_KERNEL_LIBRARY.FITS"; }
+  
+  recipe molecfit_correct;
+  product SCIENCE_TELLURIC_CORR {    REFLEX.CATG = "SCIENCE_TELLURIC_CORR";     PRO.CATG = "SCIENCE_TELLURIC_CORR";     PRO.EXT="SCIENCE_TELLURIC_CORR.FITS";    }
+  product SPECTRUM_TELLURIC_CORR {   REFLEX.CATG = "SPECTRUM_TELLURIC_CORR";    PRO.CATG = "SPECTRUM_TELLURIC_CORR";    PRO.EXT="SPECTRUM_TELLURIC_CORR.FITS";   }
+}
