@@ -109,11 +109,11 @@ telback: 0.1
 fit_cont: 1
 
 # Degree of coefficients for continuum fit
-cont_n: 0
+cont_n: 2
 
 # Initial constant term for continuum fit (valid for all fit ranges)
 # (emission spectrum: about 1 for correct flux_unit)
-cont_const: 1e-13
+cont_const: 1
 
 ## WAVELENGTH SOLUTION
 
