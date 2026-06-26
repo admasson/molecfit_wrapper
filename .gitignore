@@ -28,6 +28,7 @@ venv/
 
 # Molecfit per-spectrum run folders (generated at runtime)
 Output/
+backup/
 
 # Automated Program runtime files (CSVs are gitignored; add specific ones if needed)
 Automated_Program/
